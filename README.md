@@ -37,5 +37,16 @@ daily at 11:00 (or at next login if the PC was off), logging to `data/processed/
 It runs only while the user is logged in. New snapshots are not committed automatically: commit
 `data/obour/` now and then.
 
-Loading into a Supabase project: `npx supabase@2.48.3 link` then `npx supabase db push`, then import
-`data/processed/*.csv` into `crop_stats`, `prices` and `trade` (Studio → table → Import CSV).
+## Supabase
+
+Project **nabta** (`iumdwrwagaawoyurvniu`, eu-central-1, free plan): schema and seed are applied.
+Load data with the loader, which replaces each source's rows in one transaction:
+
+```bash
+cp .env.example .env          # then fill in DATABASE_URL
+cd analytics
+.venv/Scripts/python -m load all    # faostat + obour
+```
+
+New migrations: add a file under `supabase/migrations/`, run `npm run test:db`, then apply it.
+The daily task also runs `load obour` once `.env` exists.

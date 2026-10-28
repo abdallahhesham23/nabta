@@ -205,6 +205,9 @@ alter table intentions      enable row level security;
 alter table harvest_reports enable row level security;
 alter table recommendations enable row level security;
 
+-- Supabase grants anon/authenticated everything on new tables by default; start from nothing.
+revoke all on all tables in schema public from anon, authenticated;
+
 -- Public data: readable before sign-in.
 grant select on governorates, markaz, crops, crop_stats, prices, costs, trade, forecasts, dashboard_cells
   to anon, authenticated;
