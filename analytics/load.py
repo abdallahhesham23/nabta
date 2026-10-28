@@ -34,6 +34,13 @@ def database_url() -> str:
     sys.exit('DATABASE_URL not set: add it to .env (see .env.example)')
 
 
+def copy_rows(cur, table: str, columns: list[str], rows) -> None:
+    cols = sql.SQL(', ').join(map(sql.Identifier, columns))
+    with cur.copy(sql.SQL('copy {} ({}) from stdin').format(sql.Identifier(table), cols)) as copy:
+        for r in rows:
+            copy.write_row(r)
+
+
 def replace(cur, table: str, path: Path, source: str) -> int:
     with open(path, encoding='utf-8', newline='') as f:
         rows = list(csv.reader(f))
@@ -42,10 +49,7 @@ def replace(cur, table: str, path: Path, source: str) -> int:
     if any(r[i] != source for r in body):  # never let one source's file wipe another's rows
         raise ValueError(f'{path.name} has rows whose source is not {source!r}')
     cur.execute(sql.SQL('delete from {} where source = %s').format(sql.Identifier(table)), [source])
-    cols = sql.SQL(', ').join(map(sql.Identifier, header))
-    with cur.copy(sql.SQL('copy {} ({}) from stdin').format(sql.Identifier(table), cols)) as copy:
-        for r in body:
-            copy.write_row([v if v != '' else None for v in r])
+    copy_rows(cur, table, header, ([v if v != '' else None for v in r] for r in body))
     cur.execute(sql.SQL('select count(*) from {} where source = %s').format(sql.Identifier(table)), [source])
     loaded = cur.fetchone()[0]
     assert loaded == len(body), f'{table}: loaded {loaded} rows, file has {len(body)}'
