@@ -1,0 +1,10 @@
+{
+  "name": "nabta",
+  "private": true,
+  "scripts": {
+    "test:db": "node --test \"supabase/tests/*.test.mjs\""
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.10"
+  }
+}
