@@ -32,5 +32,10 @@ python -m venv .venv && .venv/Scripts/python -m pip install -r requirements.txt 
 `data/obour/` holds one raw snapshot per auction day and is committed: the market's page has no
 history, so a day that isn't collected is lost.
 
+On the dev PC, the Windows scheduled task **"Nabta Obour prices"** runs `analytics/obour_daily.cmd`
+daily at 11:00 (or at next login if the PC was off), logging to `data/processed/obour_collector.log`.
+It runs only while the user is logged in. New snapshots are not committed automatically: commit
+`data/obour/` now and then.
+
 Loading into a Supabase project: `npx supabase@2.48.3 link` then `npx supabase db push`, then import
 `data/processed/*.csv` into `crop_stats`, `prices` and `trade` (Studio → table → Import CSV).
