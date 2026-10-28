@@ -141,7 +141,7 @@ Multi-plot + paid tier, Next.js web dashboard for ministry/bank/B2B, iOS build, 
 ## 7. Decisions (answered 2026-10-28)
 
 1. **Data:** start with public sources only (FAOSTAT + CAPMAS + Obour).
-2. **Price history:** collect daily Obour prices from news reports, storing the article link on each row.
+2. **Price history:** collect daily Obour prices. Changed on 2026-10-29: the market's own public price page turned up, so the collector reads that instead of news reports. It has no history, so it must run daily from now on.
 3. **Hosting:** Supabase Cloud for the pilot. Move to an Egyptian host later if the bank or Law 151/2020 requires it.
 4. **Login:** one-time codes over WhatsApp (Twilio Verify).
 5. **Bank loan priority:** not in the pilot. Bank branches only help farmers register.
