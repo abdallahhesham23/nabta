@@ -17,7 +17,8 @@ export default function FarmScreen() {
   const market = useMarket();
 
   if (session === undefined || !market.data) return <Loading error={market.error} />;
-  return session ? <Farm userId={session.user.id} market={market.data} /> : <Login />;
+  if (!session) return <Login />;
+  return <Farm userId={session.user.id} anonymous={!!session.user.is_anonymous} market={market.data} />;
 }
 
 // ---------------------------------------------------------------- login (WhatsApp one-time code)
@@ -46,6 +47,14 @@ function Login() {
     if (error) setMsg('الكود مش صحيح أو انتهى. اطلب كود جديد.');
   }
 
+  // Phone login needs an SMS/WhatsApp provider; until then farmers start anonymously.
+  async function startAnonymously() {
+    setBusy(true); setMsg('');
+    const { error } = await supabase.auth.signInAnonymously();
+    setBusy(false);
+    if (error) setMsg('تعذّر البدء دلوقتي. جرّب تاني بعد شوية.');
+  }
+
   return (
     <Screen>
       <Card>
@@ -55,6 +64,11 @@ function Login() {
         {sent ? <Field label="الكود" value={code} onChangeText={setCode} keyboardType="number-pad" /> : null}
         {msg ? <Body>{msg}</Body> : null}
         <Button label={sent ? 'تأكيد الكود' : 'ابعت الكود على واتساب'} onPress={sent ? verify : send} busy={busy} />
+      </Card>
+      <Card>
+        <H2>أو ابدأ من غير تسجيل</H2>
+        <Body muted>تقدر تسجّل بيانات أرضك وتشوف التوصيات دلوقتي. بياناتك هتتحفظ على الموبايل ده، وبعدين تربطها برقمك.</Body>
+        <Button label="ابدأ من غير تسجيل" secondary onPress={startAnonymously} busy={busy} />
       </Card>
     </Screen>
   );
@@ -68,7 +82,7 @@ type Intention = { id: number; crop_id: string; season: Season; year: number; ar
 type Report = { yield_t: number };
 type Rec = { crop_id: string; rank: number; evi: number; expected_profit_egp_per_feddan: number; expected_price_egp_per_kg: number; cost_egp_per_feddan: number };
 
-function Farm({ userId, market }: { userId: string; market: Market }) {
+function Farm({ userId, anonymous, market }: { userId: string; anonymous: boolean; market: Market }) {
   const [farmer, setFarmer] = useState<Farmer | null>(null);
   const [plot, setPlot] = useState<Plot | null>(null);
   const [intentions, setIntentions] = useState<Intention[]>([]);
@@ -96,11 +110,17 @@ function Farm({ userId, market }: { userId: string; market: Market }) {
 
   return (
     <Screen>
+      {anonymous ? (
+        <Card>
+          <Body muted>إنت بتستخدم التطبيق من غير تسجيل. بياناتك محفوظة على الموبايل ده بس؛ لو مسحت التطبيق هتضيع. أول ما الدخول برقم الموبايل يشتغل هتقدر تربط بياناتك برقمك.</Body>
+        </Card>
+      ) : null}
       <ProfileForm userId={userId} farmer={farmer} market={market} onSaved={reload} />
       {farmer ? <PlotForm plot={plot} onSaved={reload} /> : null}
       {plot ? <Recommendations recs={recs} cropName={cropName} /> : null}
       {plot ? <Plans plot={plot} intentions={intentions} market={market} cropName={cropName} onSaved={reload} /> : null}
-      <Button label="تسجيل الخروج" secondary onPress={() => supabase.auth.signOut()} />
+      {/* signing out an anonymous user strands their data: there is no way back in */}
+      {anonymous ? null : <Button label="تسجيل الخروج" secondary onPress={() => supabase.auth.signOut()} />}
     </Screen>
   );
 }

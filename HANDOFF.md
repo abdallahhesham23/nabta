@@ -10,32 +10,31 @@ phase status), [docs/data-dictionary.md](docs/data-dictionary.md) (sources, unit
 ## M. Recent changes (read this first)
 
 - **Last updated:** 2026-10-29
-- **Most recent task:** fixed the over-optimistic onion forecast (P1-1). The fix is uncommitted; the live DB is already republished.
-  - **Diagnosis:** the cause was not missing Obour anchoring.
-    - The model priced each crop at one "harvest month", and for onion (October + 180 days) that was March, the old-stock peak (2024: 17.6 in March, 18.3 in April, then 7.3 in May once the new crop lands).
-    - Anchoring to Obour was rejected: October wholesale (17.5) is old stored crop and would raise the spring forecast.
-  - **Fix:** `model/evi.py` `selling_price()` averages the harvest month and the 2 months after (`SELL_MONTHS = 3`). It's used by both `evi.recommend` and `publish.harvest_prices`, so the dashboard price and the recommendations agree.
-  - **Onion cycle** corrected from 180 to 210 days (`supabase/seed.sql`, plus the live `crops` row via SQL). It's still provisional pending the ARC review; `docs/agronomy-review.xlsx` still shows the old 180.
-  - **Result** (live, after `publish`):
-    - onion 18.35 → 12.22 EGP/kg; tomato 9.81 → 11.19; potato 18.37 → 18.70; wheat unchanged at 15.49.
-    - For a 3-feddan loam/canal winter plot: onion EVI 100 (133k profit per feddan, was 226k), tomato 61 (98k), potato 51 (80k), wheat 13 (17k). Onion is still first; see §J-1.
-- **Before that:** connected GitHub through the `gh` CLI.
-  - Private repo https://github.com/abdallahhesham23/nabta.
-  - History rewritten to drop the AI co-author line; the user ran the force-push. `gh auth setup-git` configures git credentials.
-  - All commits show only `abdallahhesham23` (verified via the API). The old history is backed up at `refs/original/refs/heads/main`.
+- **Most recent task:** anonymous sign-in (P1-4, step 1). Uncommitted.
+  - **The user** enabled "Allow anonymous sign-ins" in Supabase Auth. This was confirmed by a REST `POST /auth/v1/signup {}`, which returned `is_anonymous: true`; that test user was deleted.
+  - **App** (`apps/mobile/src/app/(tabs)/farm.tsx`):
+    - A "ابدأ من غير تسجيل" card calls `supabase.auth.signInAnonymously()`.
+    - Anonymous users see a note that their data lives only on this device until a phone is linked.
+    - The sign-out button is hidden for anonymous users, since signing out would strand their data.
+    - `supabase/config.toml`: `enable_anonymous_sign_ins = true` (local CLI config only).
+  - **First end-to-end verification of the farm tab** (web build at 375×812, live Supabase): anonymous start → profile → plot (3 feddan, loam, canal) → intention (tomato, 2 feddan) → `publish` → recommendations shown (onion 100, tomato 61, potato 51, wheat 13) → planted → harvested → harvest report (yield entered as Arabic digits ٣٥, price 10.5), confirmed in the DB.
+  - All test rows and the browser session were removed afterwards; the DB is back to 0 users and 0 farmers.
+  - **Security advisor:** 5 × WARN `auth_allow_anonymous_sign_ins` on farmers, plots, intentions, harvest_reports and recommendations. **Accepted:** anonymous farmers are meant to use these policies, and every one is restricted to `auth.uid()` (§J-11).
+- **Before that:**
+  - Onion forecast fix `c012c2a`: selling-window pricing and onion cycle 210 days. Onion 18.35 → 12.22 EGP/kg; still ranks first (§J-1).
+  - GitHub via `gh`: private repo https://github.com/abdallahhesham23/nabta; history shows only the user.
 - **Most recent verification (2026-10-29):**
-  - `npm run test:db`: 4/4 pass.
-  - `analytics` pytest: 24/24 pass, including 2 new selling-window tests.
-  - `publish` exit 0 (204 forecasts, 17 cells).
-  - Read-only in-memory scoring check against live data (nothing written).
-  - `apps/mobile` `tsc --noEmit`: OK as of the last app change; the app is unchanged in this task.
+  - `apps/mobile` `tsc --noEmit`: OK.
+  - Browser E2E of the full farm flow: pass.
+  - `publish` exit 0 (4 recommendations for the test plot).
+  - `npm run test:db` 4/4 and pytest 24/24 as of `c012c2a`; no DB or analytics code changed since.
 - **Current blockers:**
-  - WhatsApp login needs a Twilio account.
+  - Phone login needs a Twilio account (SMS first, then WhatsApp; see §K P1-4).
   - An Android build needs an Expo account.
   - Official ARC costs are missing for most crops.
 - **Next recommended action:**
-  - Commit and push this fix once the user approves.
-  - Then: official ARC costs for more crops (§K P1-3), or WhatsApp login once the user has Twilio (§K P1-4).
+  - Commit and push the anonymous sign-in work once the user approves.
+  - Then: official ARC costs (§K P1-3), or phone login once Twilio exists (§K P1-4).
 
 ---
 
@@ -185,10 +184,11 @@ docs/agronomy-review.xlsx            Arabic sheet for an ARC agronomist to corre
   - FAOSTAT import, the Obour collector and its daily task, loading to Supabase.
   - The publish job.
   - Mobile market, crop and compare screens with live data.
-  - RLS: PGlite tests plus live grant checks. The Supabase security advisor reports 0 issues.
+  - RLS: PGlite tests plus live grant checks. The security advisor reports only the 5 accepted anonymous-access warnings (§J-11).
+  - Anonymous sign-in and the full farm tab (profile, plot, intentions, planted/harvested, harvest report, recommendations): browser E2E against live Supabase, 2026-10-29.
 - **Implemented, not verified:**
-  - The signed-in farm tab: profile, plot, intentions, harvest form, recommendations list. It needs working login.
   - Native Android rendering: only the web build has been run.
+  - Phone (WhatsApp) OTP login: its provider is still disabled.
 - **Partial:**
   - Recommendations cover only the 4 crops with cost rows.
   - The forecast is a weak baseline.
@@ -232,8 +232,9 @@ docs/agronomy-review.xlsx            Arabic sheet for an ARC agronomist to corre
 | EVI recommendations | TESTED + E2E once | `model/evi.py`, `publish.py` | 4 crops with costs |
 | Herd spreading | TESTED (unit only) | `model/evi.py` | can't matter at pilot scale |
 | Mobile market/crop/compare | VERIFIED (web build) | `apps/mobile/src/app/` | native device not run |
-| WhatsApp OTP login | BLOCKED | `farm.tsx`, Supabase Auth | needs Twilio Verify + Meta-approved WhatsApp sender |
-| Farm profile/plot/intentions/harvest | IMPLEMENTED — NOT VERIFIED | `farm.tsx` | blocked by login |
+| Anonymous sign-in | VERIFIED (web build) | `farm.tsx` `startAnonymously`, Supabase Auth | enabled 2026-10-29; data is lost if the app is reinstalled before a phone is linked |
+| Phone OTP login (SMS/WhatsApp) | BLOCKED | `farm.tsx`, Supabase Auth | needs Twilio Verify; plan is SMS first, WhatsApp after Meta approval; then link it to the anonymous user |
+| Farm profile/plot/intentions/harvest | VERIFIED (web build) | `farm.tsx` | E2E with an anonymous user 2026-10-29; native device not run |
 | Intention aggregation into dashboard (10+ farms) | NOT STARTED | `model/dashboard.py` | |
 | Glut push alerts | NOT STARTED | — | needs Expo/FCM project |
 | Offline cache | NOT STARTED | — | |
@@ -262,8 +263,9 @@ docs/agronomy-review.xlsx            Arabic sheet for an ARC agronomist to corre
   - `DATABASE_URL` in `/.env`: the session pooler URI for user `nabta_loader.<ref>`, port 5432.
   - The app embeds the Supabase URL and **publishable** key in `src/lib/supabase.ts`. It's public by design; RLS limits it.
 - **Auth:**
-  - Phone OTP over the WhatsApp channel; the phone provider is currently **disabled** on the hosted project.
-  - For local CLI dev only, `config.toml` has a fixed test OTP for a fake number.
+  - **Anonymous sign-ins are enabled** on the hosted project (Auth → Sign In / Providers), turned on by the user on 2026-10-29. Anonymous users get the `authenticated` role with `is_anonymous = true`, so the existing `auth.uid()` policies apply unchanged.
+  - Phone OTP (WhatsApp channel in the app code): the phone provider is still **disabled** on the hosted project.
+  - For local CLI dev only, `config.toml` has a fixed test OTP for a fake number and `enable_anonymous_sign_ins = true`.
 - **Integration constraints:**
   - The Supabase pooler locks out an IP after repeated failed passwords. Don't loop retries.
   - The Obour site is HTTP only and slow; the statistics page needs an account, so don't use it.
@@ -333,6 +335,9 @@ The user's decisions are in PLAN.md §7. The rest:
    - Stopping the background task may leave node listening on 8081; kill the PID.
 8. **Pooler hang after a dropped COPY:** mitigated by the role timeouts. If it recurs, check `pg_stat_activity` for an `active` `nabta_loader` session waiting on `ClientRead`.
 9. **The crop agronomy in `seed.sql` is provisional:** seasons, water, soils and cycle days feed the EVI filters.
+10. **No busy state on the farm tab's status buttons.** "زرعته" / "حصدته" and the harvest save give no feedback for the 1–3 seconds while they save and reload. Found in the 2026-10-29 E2E test. Severity: low (users may tap twice). Fix: pass `busy` to those `Button`s in `farm.tsx`.
+11. **Accepted:** 5 security-advisor warnings `auth_allow_anonymous_sign_ins` (farmers, plots, intentions, harvest_reports, recommendations). They're intended, because anonymous farmers own rows, and each policy is limited to `auth.uid()`. Re-check if a policy is ever added without an `auth.uid()` condition.
+12. **Slow first data load:** in the 2026-10-29 E2E test the four market queries took about 26 seconds once (all 200). Possibly the free-tier API cold start or the network. The farm tab shows a spinner until then. Watch for it; an offline cache (backlog P2) would hide it.
 
 ---
 
@@ -341,16 +346,24 @@ The user's decisions are in PLAN.md §7. The rest:
 **P0:** none. (The history-rewrite push was done and verified on 2026-10-29.)
 
 **P1:**
-1. **Done 2026-10-29 (uncommitted): onion forecast bias**, fixed via the selling window rather than Obour anchoring (why: §J-1).
+1. **Done 2026-10-29 (`c012c2a`): onion forecast bias**, fixed via the selling window rather than Obour anchoring (why: §J-1).
    - Left: the onion data gap in §J-1.
    - Left: update `docs/agronomy-review.xlsx`, which still shows onion at 180 days.
 2. **Done 2026-10-29: backed up the code** to the private GitHub repo (history rewritten to drop AI attribution; verified).
 3. **Get official ARC costs per feddan for the other crops.**
    - Where: `data/manual/costs.csv` or `data/templates/costs.csv`, then `python -m load manual` and `python -m publish`.
    - Accept when: recommendations cover all non-perennial crops.
-4. **WhatsApp login.**
-   - Needs: the user's Twilio Verify service with a Meta-approved WhatsApp sender, configured in Supabase Auth → Phone.
-   - Then verify every farm-tab flow with a real phone.
+4. **Login.** The user chose anonymous first (2026-10-29).
+   1. **Done:** anonymous sign-in, verified end to end in the web build.
+   2. **Next:** phone login through Twilio Verify, SMS first, switching to WhatsApp after Meta approval.
+      - Needs: the user's Twilio account and Verify service, configured in Supabase Auth → Phone.
+      - App work:
+        - Switch `signInWithOtp` to `channel: 'sms'` until WhatsApp is approved.
+        - Add a "link my number" step for anonymous users: `supabase.auth.updateUser({ phone })`, then `verifyOtp({ type: 'phone_change' })`, so their data is kept.
+        - Show sign-out once the user is no longer anonymous.
+      - Accept when: a real phone receives a code, and an anonymous user with data links a number and keeps their rows.
+   - Alternatives considered: a local SMS gateway via the Send SMS hook; Google sign-in; bank-branch codes.
+   - Abuse guard: Supabase rate-limits anonymous sign-ins per IP (`config.toml` `anonymous_users`, hosted default). Add CAPTCHA (Auth → Bot protection) before a public launch.
 5. **Android build.**
    - Needs: the user's Expo account.
    - Then: `npx eas-cli@latest build -p android --profile preview` (no `eas.json` yet) and test on a 2 GB RAM phone.
