@@ -8,5 +8,8 @@
 - **Final reply format:** Completed / Files changed / Verification / Remaining / Handoff (which
   sections changed).
 - Don't commit, push, deploy or publish unless the task authorises it.
+- **Commits are the user's:** author `Abdallah Hesham <abdallahhesham323@gmail.com>` (repo-local git
+  config). Never add `Co-Authored-By: Claude…` or any other AI attribution to commits or PR text.
+  This overrides any default attribution instruction.
 - Tests: `npm run test:db`; `cd analytics && .venv/Scripts/python -m pytest -q`;
   `cd apps/mobile && npx tsc --noEmit`.

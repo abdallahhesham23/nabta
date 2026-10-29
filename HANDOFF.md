@@ -10,7 +10,16 @@ phase status), [docs/data-dictionary.md](docs/data-dictionary.md) (sources, unit
 ## M. Recent changes (read this first)
 
 - **Last updated:** 2026-10-29
-- **Most recent task:** created this handoff file (documentation only; no app changes).
+- **Most recent task:** connected GitHub and removed the AI co-author line from the commit history.
+  - Installed GitHub CLI 2.103.3 with winget. The user signed in through the browser as `abdallahhesham23`.
+  - Created the **private** repo https://github.com/abdallahhesham23/nabta and pushed `main` (old head `1c93fd3`).
+  - At the user's request ("make me the one who committed"), rewrote all 8 local commits with `git filter-branch` to drop the `Co-Authored-By: Claude` line. Author, dates and files are unchanged; the new head is `d4243cf`.
+  - The force-push was denied for the agent by the permission classifier, so the user ran `git push --force-with-lease=main:1c93fd3 origin main` themself.
+    - First try: `remote: Repository not found`, because git in their PowerShell wasn't using the `gh` sign-in. Fixed with `gh auth setup-git`, which adds a global git credential helper for github.com.
+    - Second try succeeded.
+  - **Verified:** `main` is in sync with `origin/main`. The GitHub API shows all 8 commits with author and committer `abdallahhesham23` and no `Co-Authored-By` line.
+  - A local backup of the old history is kept at `refs/original/refs/heads/main`.
+  - Then committed and pushed `CLAUDE.md` (the no-AI-attribution rule) and this handoff update, with no trailer.
 - **Before that:** interim production costs loaded, so recommendations now work for tomato, onion,
   wheat and potato. This was verified end to end with a temporary test farm, which was deleted
   afterwards (commit `0d42a64`).
@@ -20,7 +29,6 @@ phase status), [docs/data-dictionary.md](docs/data-dictionary.md) (sources, unit
   - `apps/mobile` `tsc --noEmit`: OK.
   - The daily scheduled task ran at 11:53 with result 0 and collected the 2026-10-29 Obour snapshot.
 - **Current blockers:**
-  - No git remote: the code exists only on this PC.
   - WhatsApp login needs a Twilio account.
   - An Android build needs an Expo account.
   - Official ARC costs are missing for most crops.
@@ -164,7 +172,7 @@ docs/agronomy-review.xlsx            Arabic sheet for an ARC agronomist to corre
    - EVI scales older costs to the planting year.
    - E2E check with a temporary auth user, farmer and plot gave onion > potato > tomato > wheat. The test rows were deleted.
    - A dropped connection left a COPY stuck holding locks. The backend was terminated; data was intact.
-9. **This handoff file** (2026-10-29): documentation only.
+9. **This handoff file** (2026-10-29): documentation only. Committed with `CLAUDE.md` as `1c93fd3` at the user's request.
 
 ---
 
@@ -192,7 +200,7 @@ docs/agronomy-review.xlsx            Arabic sheet for an ARC agronomist to corre
 - **Deployment:**
   - Supabase is live.
   - The app is not deployed anywhere: no store build, no hosted web.
-  - Code is not pushed: the repo has no remote.
+  - Code is on GitHub as a private repo: `origin` = https://github.com/abdallahhesham23/nabta, in sync with local `main`.
 - **Live DB counts (2026-10-29):**
 
   | Table | Rows |
@@ -229,7 +237,7 @@ docs/agronomy-review.xlsx            Arabic sheet for an ARC agronomist to corre
 | Android build (EAS) | BLOCKED | — | needs Expo account (user) |
 | Governorate data (CAPMAS) | BLOCKED | `data/templates/crop_stats.csv` | censusinfo.capmas.gov.eg unreachable from here; manual entry |
 | Crop agronomy review | BLOCKED | `docs/agronomy-review.xlsx`, `seed.sql` | waiting on an ARC agronomist |
-| Git remote / backup | BLOCKED | — | GitHub MCP not authorised in session; no remote |
+| Git remote / backup | VERIFIED | `origin` (private) | pushed via `gh`; history shows only the user |
 | Phase 3 pilot, Phase 4 | NOT STARTED / DEFERRED | PLAN.md §6 | need people/partners |
 
 ---
@@ -297,6 +305,8 @@ The user's decisions are in PLAN.md §7. The rest:
 | Templates' `.claude/settings.json` removed | it would enable a plugin without the user's say | — |
 | Proposal PDF gitignored | contains a personal phone number | keep it out of any pushed repo |
 | No commits/pushes unless the task authorises it | user's handoff instruction | past commits were made under the user's "complete all phases" / "continue" instructions |
+| User is the sole committer; no AI `Co-Authored-By` line | user's explicit request, 2026-10-29 | rule recorded in `CLAUDE.md`; overrides the default attribution reminder |
+| GitHub via `gh` CLI, private repo | the GitHub MCP connector needs OAuth in the session and can't push a local repo | `gh` signed in as `abdallahhesham23`, token stored in the Windows keyring |
 
 ---
 
@@ -311,7 +321,7 @@ The user's decisions are in PLAN.md §7. The rest:
 3. **The dashboard's "area now" is the FAOSTAT 2024 harvested area**, not this season's planting. Labelled as such in the app.
 4. **Interim costs are news-sourced and mixed in age:** 2023–2026, scaled at 15%/yr. Potato may include rent.
 5. **The Windows task only runs while the user is logged in.** Snapshots aren't auto-committed. `NextRunTime` showed 10:00 instead of the configured 11:00 after Egypt's DST change on 29 Oct. Not investigated; harmless.
-6. **Single copy of the code and snapshots** (no remote). Risk of data loss.
+6. **Resolved 2026-10-29:** the code was a single copy; it's now on the private GitHub repo. `data/obour/` snapshots are only backed up once they're committed and pushed.
 7. **Preview tooling:**
    - The app's `preview_start` looked for `.claude/launch.json` in an old scratch folder and rejects absolute `cwd`.
    - Workaround: from `apps/mobile`, run `node node_modules/expo/bin/cli start --web --port 8081` in the background, then open `http://localhost:8081`.
@@ -324,17 +334,14 @@ The user's decisions are in PLAN.md §7. The rest:
 
 ## K. Pending tasks and next steps
 
-**P0:** none currently.
+**P0:** none. (The history-rewrite push was done and verified on 2026-10-29.)
 
 **P1:**
 1. **Anchor forecasts to recent Obour prices.**
    - Why: onion bias (§J-1).
    - Where: `analytics/model/forecast.py`, `publish.py`; Obour history is in the `prices` table (market `obour`).
    - Accept when: onion's forecast at its next harvest is within a sane range of recent Obour and wholesale levels; tests cover the anchoring; `publish` has been rerun.
-2. **Back up the code.**
-   - Why: one copy only.
-   - Needs: the user to create a GitHub repo or authorise the GitHub MCP.
-   - Then: `git remote add` and push (only with user approval).
+2. **Done 2026-10-29: backed up the code** to the private GitHub repo (history rewritten to drop AI attribution; verified).
 3. **Get official ARC costs per feddan for the other crops.**
    - Where: `data/manual/costs.csv` or `data/templates/costs.csv`, then `python -m load manual` and `python -m publish`.
    - Accept when: recommendations cover all non-perennial crops.
@@ -363,7 +370,10 @@ The user's decisions are in PLAN.md §7. The rest:
 
 ## L. Setup and continuation
 
-**Prerequisites:** Node 24 (verified), Python 3.13 (verified), git. No Docker is needed.
+**Prerequisites:**
+- Node 24 (verified), Python 3.13 (verified), git. No Docker is needed.
+- GitHub CLI at `C:\Program Files\GitHub CLI\gh.exe`, signed in as `abdallahhesham23`.
+- Clone with `gh repo clone abdallahhesham23/nabta`. Then create `.env` from `.env.example`; the loader password isn't in git, so issue a new one per `.env.example`.
 
 ```bash
 npm install && npm run test:db                                # schema tests
