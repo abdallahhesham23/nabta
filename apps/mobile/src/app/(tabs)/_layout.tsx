@@ -3,7 +3,9 @@ import { Text } from 'react-native';
 
 import { theme } from '@/lib/theme';
 
-const icon = (glyph: string) => () => <Text style={{ fontSize: 22 }}>{glyph}</Text>;
+const icon = (glyph: string) => function TabIcon() {
+  return <Text style={{ fontSize: 22 }}>{glyph}</Text>;
+};
 
 export default function TabsLayout() {
   return (

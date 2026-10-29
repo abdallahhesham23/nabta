@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect, useState } from 'react';
 
 import { supabase } from './supabase';
@@ -13,6 +14,7 @@ export type Cell = {
   crop_id: string; data_year: number; area_now_feddan: number; expected_prod_t: number;
   last_year_prod_t: number; demand_t: number | null; gap_pct: number | null; outlook: Outlook | null;
   yield_t_per_feddan: number; price_egp_per_kg: number | null; revenue_egp_per_feddan: number | null;
+  intended_area_feddan: number | null; intending_farms: number | null;  // null below 10 farms (privacy)
 };
 export type MarketPrice = { crop_id: string; price_date: string; min_egp_per_kg: number; max_egp_per_kg: number };
 export type Forecast = {
@@ -43,13 +45,36 @@ async function fetchMarket(): Promise<Market> {
   };
 }
 
+// Last good market data, kept on the phone so the app opens offline and shows something during a slow load.
+const STORE_KEY = 'nabta.market.v1';
 let cache: Promise<Market> | null = null;
 
+async function fetchAndStore(): Promise<Market> {
+  const market = await fetchMarket();
+  AsyncStorage.setItem(STORE_KEY, JSON.stringify(market)).catch(() => {});  // best effort
+  return market;
+}
+
+async function readStored(): Promise<Market | null> {
+  try {
+    const s = await AsyncStorage.getItem(STORE_KEY);
+    return s ? (JSON.parse(s) as Market) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** `stale` is true while showing stored data (offline, or before the fresh load finishes). */
 export function useMarket() {
-  const [state, setState] = useState<{ data?: Market; error?: string }>({});
+  const [state, setState] = useState<{ data?: Market; error?: string; stale?: boolean }>({});
   useEffect(() => {
-    cache ??= fetchMarket();
-    cache.then((data) => setState({ data }), (e) => { cache = null; setState({ error: String(e.message ?? e) }); });
+    let fresh = false;
+    readStored().then((m) => { if (m && !fresh) setState({ data: m, stale: true }); });
+    cache ??= fetchAndStore();
+    cache.then(
+      (data) => { fresh = true; setState({ data }); },
+      (e) => { cache = null; setState((s) => (s.data ? s : { error: String(e.message ?? e) })); },
+    );
   }, []);
   return state;
 }

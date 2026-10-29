@@ -10,31 +10,43 @@ phase status), [docs/data-dictionary.md](docs/data-dictionary.md) (sources, unit
 ## M. Recent changes (read this first)
 
 - **Last updated:** 2026-10-29
-- **Most recent task:** anonymous sign-in (P1-4, step 1). Uncommitted.
-  - **The user** enabled "Allow anonymous sign-ins" in Supabase Auth. This was confirmed by a REST `POST /auth/v1/signup {}`, which returned `is_anonymous: true`; that test user was deleted.
-  - **App** (`apps/mobile/src/app/(tabs)/farm.tsx`):
-    - A "ابدأ من غير تسجيل" card calls `supabase.auth.signInAnonymously()`.
-    - Anonymous users see a note that their data lives only on this device until a phone is linked.
-    - The sign-out button is hidden for anonymous users, since signing out would strand their data.
-    - `supabase/config.toml`: `enable_anonymous_sign_ins = true` (local CLI config only).
-  - **First end-to-end verification of the farm tab** (web build at 375×812, live Supabase): anonymous start → profile → plot (3 feddan, loam, canal) → intention (tomato, 2 feddan) → `publish` → recommendations shown (onion 100, tomato 61, potato 51, wheat 13) → planted → harvested → harvest report (yield entered as Arabic digits ٣٥, price 10.5), confirmed in the DB.
-  - All test rows and the browser session were removed afterwards; the DB is back to 0 users and 0 farmers.
-  - **Security advisor:** 5 × WARN `auth_allow_anonymous_sign_ins` on farmers, plots, intentions, harvest_reports and recommendations. **Accepted:** anonymous farmers are meant to use these policies, and every one is restricted to `auth.uid()` (§J-11).
-- **Before that:**
-  - Onion forecast fix `c012c2a`: selling-window pricing and onion cycle 210 days. Onion 18.35 → 12.22 EGP/kg; still ranks first (§J-1).
-  - GitHub via `gh`: private repo https://github.com/abdallahhesham23/nabta; history shows only the user.
+- **Most recent task:** the user said "do them": everything on the backlog that needs no accounts. **Uncommitted.**
+  1. **Save feedback** (`farm.tsx`): spinners on the profile/plot save, "سجّل", "زرعته", "حصدته" and harvest-save buttons. Fixes the old §J-10.
+  2. **Glut warning** (`farm.tsx` Plans): choosing a crop whose outlook is `surplus` shows "⚠️ المعروض المتوقع … أعلى من المعتاد (+x٪)". Verified: shown for tomato (+11.5%), not for wheat.
+  3. **Offline cache** (`src/lib/data.ts`): market data is stored in AsyncStorage (`nabta.market.v1`), shown at once on the next open (`stale` flag plus a note on the market tab), then refreshed.
+     - Verified: data is stored (11.5 KB in the web build).
+     - **Not verified:** a real offline start.
+  4. **App planting intentions on the dashboard** (privacy-protected):
+     - Migration `20261030000000_intentions_in_dashboard.sql` (applied live, version aligned) adds `intended_area_feddan` and `intending_farms`.
+     - `dashboard.intended()` sums planned/planted intentions for the next season, per crop, **only when 10 or more distinct farms** planned it (`MIN_FARMS`).
+     - `publish.py` reads them (and `read()` now takes params).
+     - The crop screen shows "N مزارع ناويين يزرعوا X فدان" or the privacy message.
+     - Verified:
+       - Unit test.
+       - The live query, run through MCP, with 19 temporary farms (10 tomato, 9 onion), fed to `intended()`: tomato (20 feddan, 10 farms), onion hidden.
+       - App display for both cases.
+     - **Not verified:** the live `publish` run (§J-13). The temporary farms were deleted and the tomato cell reset to null.
+  5. **Lint:** `npx expo lint` set up (`eslint.config.js`, eslint ^9, eslint-config-expo ~57.0.2, `npm run lint`). It found and fixed 2 errors: unnamed tab-icon components (`_layout.tsx`), and setState-in-effect in the farm tab (now `fetchFarm()` + `.then(setData)`). Lint is clean.
+  6. **Agronomy sheet:** onion's current cycle changed 180 → 210 in `docs/agronomy-review.xlsx`.
+  7. **Auto-commit of Obour snapshots:** `analytics/commit_snapshots.py`, run by `obour_daily.cmd` after the collector.
+     - Commits only `data/obour/` under the repo author, with no AI line.
+     - Pushes only if that commit is the sole unpushed one, and skips off `main`.
+     - 3 tests use temporary git repos. On the real repo it reported "nothing new".
+- **Before that:** anonymous sign-in `520b2bb` (verified end to end); onion forecast fix `c012c2a`; GitHub via `gh` (private repo, history shows only the user).
 - **Most recent verification (2026-10-29):**
-  - `apps/mobile` `tsc --noEmit`: OK.
-  - Browser E2E of the full farm flow: pass.
-  - `publish` exit 0 (4 recommendations for the test plot).
-  - `npm run test:db` 4/4 and pytest 24/24 as of `c012c2a`; no DB or analytics code changed since.
+  - pytest 28/28.
+  - `npm run test:db` 4/4.
+  - Mobile `tsc` OK and `expo lint` clean.
+  - Browser checks of the glut warning and the intentions display.
+  - All test data removed (0 users, farmers, plots, intentions, recommendations).
 - **Current blockers:**
-  - Phone login needs a Twilio account (SMS first, then WhatsApp; see §K P1-4).
+  - **The session pooler hangs from this PC since about 10:54 UTC on 29 Oct (§J-13).** `publish`/`load` time out; the HTTPS API and MCP work. The daily task will retry.
+  - Phone login needs a Twilio account (§K P1-4).
   - An Android build needs an Expo account.
   - Official ARC costs are missing for most crops.
 - **Next recommended action:**
-  - Commit and push the anonymous sign-in work once the user approves.
-  - Then: official ARC costs (§K P1-3), or phone login once Twilio exists (§K P1-4).
+  - Commit and push this batch once the user approves.
+  - Confirm the next daily run (or a manual `python -m publish`) succeeds once the pooler path recovers.
 
 ---
 
@@ -111,6 +123,7 @@ supabase/
   migrations/20261029000000_phase1_outputs.sql  dashboard price/yield/revenue cols; recommendation "why" cols
   migrations/20261029010000_loader_role.sql     nabta_loader role (password set out of band)
   migrations/20261029020000_loader_timeouts.sql statement/idle timeouts for nabta_loader
+  migrations/20261030000000_intentions_in_dashboard.sql  intended_area_feddan, intending_farms on dashboard_cells
   seed.sql                           27 governorates, 17 crops (agronomy PROVISIONAL)
   tests/schema.test.mjs              PGlite: seed counts, anon access, RLS isolation, constraints
 analytics/
@@ -121,7 +134,8 @@ analytics/
   model/dashboard.py                 quad dashboard cells per crop (national)
   model/evi.py                       EVI recommendations + herd spreading
   publish.py                         reads DB, runs models, writes forecasts/dashboard_cells/recommendations
-  obour_daily.cmd                    scheduled: collect → load obour → publish
+  obour_daily.cmd                    scheduled: collect → commit_snapshots → load obour → publish
+  commit_snapshots.py                commit (and push if safe) new data/obour/ snapshots under the repo author
   tests/                             test_faostat.py, test_obour.py, test_model.py
 apps/mobile/src/
   app/_layout.tsx                    stack, web dir=rtl
@@ -194,8 +208,7 @@ docs/agronomy-review.xlsx            Arabic sheet for an ARC agronomist to corre
   - The forecast is a weak baseline.
 - **Not implemented:**
   - Glut push alerts.
-  - Offline cache.
-  - Adding app planting intentions (10+ farms per cell) into dashboard cells.
+  - The live `publish` run of intentions on the dashboard (blocked by the pooler, §J-13).
   - Governorate-level dashboard cells.
   - SARIMA forecasting with a backtest.
   - EAS build.
@@ -235,9 +248,12 @@ docs/agronomy-review.xlsx            Arabic sheet for an ARC agronomist to corre
 | Anonymous sign-in | VERIFIED (web build) | `farm.tsx` `startAnonymously`, Supabase Auth | enabled 2026-10-29; data is lost if the app is reinstalled before a phone is linked |
 | Phone OTP login (SMS/WhatsApp) | BLOCKED | `farm.tsx`, Supabase Auth | needs Twilio Verify; plan is SMS first, WhatsApp after Meta approval; then link it to the anonymous user |
 | Farm profile/plot/intentions/harvest | VERIFIED (web build) | `farm.tsx` | E2E with an anonymous user 2026-10-29; native device not run |
-| Intention aggregation into dashboard (10+ farms) | NOT STARTED | `model/dashboard.py` | |
+| Intentions on dashboard (10+ farms) | TESTED; live publish not run | `dashboard.intended`, `publish.py`, `crop/[id].tsx` | app display verified; publish blocked by pooler (§J-13) |
+| Glut warning (in-app, when planning a surplus crop) | VERIFIED (web) | `farm.tsx` Plans | |
 | Glut push alerts | NOT STARTED | — | needs Expo/FCM project |
-| Offline cache | NOT STARTED | — | |
+| Offline cache (market data) | IMPLEMENTED — storage verified | `src/lib/data.ts` | an actual offline start not tested |
+| Snapshot auto-commit | TESTED | `analytics/commit_snapshots.py` | first real commit happens on the next daily run with a new snapshot |
+| Mobile lint | VERIFIED | `apps/mobile/eslint.config.js`, `npm run lint` | clean |
 | Android build (EAS) | BLOCKED | — | needs Expo account (user) |
 | Governorate data (CAPMAS) | BLOCKED | `data/templates/crop_stats.csv` | censusinfo.capmas.gov.eg unreachable from here; manual entry |
 | Crop agronomy review | BLOCKED | `docs/agronomy-review.xlsx`, `seed.sql` | waiting on an ARC agronomist |
@@ -257,7 +273,8 @@ docs/agronomy-review.xlsx            Arabic sheet for an ARC agronomist to corre
 - **Constraints:** non-negative quantities; month 1–12; EVI 0–100; one stats row per (crop, gov, season, year, source).
 - **Migrations:**
   - Applied to the live DB via the Supabase MCP `apply_migration`. After each one, the version in `supabase_migrations.schema_migrations` was **manually updated** to match the filename. Do the same for new migrations, or `supabase db push` will try to reapply them.
-  - Live versions: `20261028000000`, `20261029000000`, `20261029010000`, `20261029020000`.
+  - Live versions: `20261028000000`, `20261029000000`, `20261029010000`, `20261029020000`, `20261030000000`.
+  - Privacy rule: `dashboard_cells.intended_area_feddan` and `intending_farms` are only filled when 10 or more distinct farms planned the crop (`model/dashboard.py` `MIN_FARMS`).
 - **Sources:** FAOSTAT bulk files (QCL, PP, SCL); the official Obour page; `data/manual` (cited news figures and the official wheat price). Full details in [docs/data-dictionary.md](docs/data-dictionary.md).
 - **Env vars:**
   - `DATABASE_URL` in `/.env`: the session pooler URI for user `nabta_loader.<ref>`, port 5432.
@@ -280,7 +297,8 @@ docs/agronomy-review.xlsx            Arabic sheet for an ARC agronomist to corre
 | Command (from repo root unless noted) | Covers | Last result (2026-10-29) |
 |---|---|---|
 | `npm run test:db` | migrations + seed in PGlite, anon access, RLS isolation, constraints | 4/4 pass |
-| `cd analytics && .venv/Scripts/python -m pytest -q` | FAOSTAT parsing, Obour parsing/date logic, dashboard, forecast, EVI incl. spreading, cost growth, selling window | 24/24 pass |
+| `cd analytics && .venv/Scripts/python -m pytest -q` | FAOSTAT parsing, Obour parsing/date logic, dashboard, forecast, EVI incl. spreading, cost growth, selling window, intentions privacy threshold, snapshot auto-commit (temp git repos) | 28/28 pass |
+| `cd apps/mobile && npm run lint` | ESLint (eslint-config-expo) | clean |
 | `cd apps/mobile && npx tsc --noEmit` | app typecheck | OK |
 | Manual, browser at 375×812 | market, crop (maize), compare, login error | OK; month-label overlap fixed afterwards, but only confirmed via tsc, not re-screenshotted |
 | Manual, E2E publish with a temporary farm | recommendations written and correct | OK; test rows deleted |
@@ -288,7 +306,6 @@ docs/agronomy-review.xlsx            Arabic sheet for an ARC agronomist to corre
 **Gaps:**
 - No tests for `load.py` or `publish.py` I/O. A PGlite socket attempt failed because it doesn't support COPY; they were verified against the real DB instead.
 - No UI or E2E automated tests.
-- No lint config: `apps/mobile/AGENTS.md` suggests `npx expo lint`, which isn't set up.
 - No native device run.
 - No forecast backtest.
 
@@ -335,9 +352,18 @@ The user's decisions are in PLAN.md §7. The rest:
    - Stopping the background task may leave node listening on 8081; kill the PID.
 8. **Pooler hang after a dropped COPY:** mitigated by the role timeouts. If it recurs, check `pg_stat_activity` for an `active` `nabta_loader` session waiting on `ClientRead`.
 9. **The crop agronomy in `seed.sql` is provisional:** seasons, water, soils and cycle days feed the EVI filters.
-10. **No busy state on the farm tab's status buttons.** "زرعته" / "حصدته" and the harvest save give no feedback for the 1–3 seconds while they save and reload. Found in the 2026-10-29 E2E test. Severity: low (users may tap twice). Fix: pass `busy` to those `Button`s in `farm.tsx`.
+10. **Resolved 2026-10-29:** the farm-tab save buttons had no busy state. They now show a spinner.
 11. **Accepted:** 5 security-advisor warnings `auth_allow_anonymous_sign_ins` (farmers, plots, intentions, harvest_reports, recommendations). They're intended, because anonymous farmers own rows, and each policy is limited to `auth.uid()`. Re-check if a policy is ever added without an `auth.uid()` condition.
-12. **Slow first data load:** in the 2026-10-29 E2E test the four market queries took about 26 seconds once (all 200). Possibly the free-tier API cold start or the network. The farm tab shows a spinner until then. Watch for it; an offline cache (backlog P2) would hide it.
+12. **Slow first data load:** in the 2026-10-29 E2E test the four market queries took about 26 seconds once (all 200). Possibly the free-tier API cold start or the network. The farm tab shows a spinner until then. The market tab now shows cached data in the meantime (offline cache, 2026-10-29).
+13. **Session pooler hangs from this PC** (since about 10:54 UTC, 29 Oct). Severity: medium, because the daily load and publish can't run while it lasts.
+    - Symptoms:
+      - TCP to the pooler on 5432 and 6543 connects, but the client never finishes the handshake.
+      - The Supavisor log shows "Connection authenticated" for the attempt, then the backend sits `idle` on `ClientRead` with no query.
+      - In other words, the server's replies aren't reaching the client.
+    - Not affected: the HTTPS API (200 in about 1 s) and the Supabase MCP connector. The direct host `db.<ref>.supabase.co` doesn't resolve here (IPv6 only).
+    - Ruled out: wrong password (no auth errors), a stuck transaction (none), the role timeouts.
+    - Workaround while it lasts: run the SQL through MCP. Orphaned idle `nabta_loader` sessions can be ended with `pg_terminate_backend`.
+    - Next step: retry later or from another network. If it persists, consider an Edge Function or HTTPS-based loader.
 
 ---
 
@@ -368,14 +394,11 @@ The user's decisions are in PLAN.md §7. The rest:
    - Needs: the user's Expo account.
    - Then: `npx eas-cli@latest build -p android --profile preview` (no `eas.json` yet) and test on a 2 GB RAM phone.
 
-**P2:**
-- Add app planting intentions into `dashboard_cells`, only where a cell has 10+ farms.
+**P2:** (done 2026-10-29: intentions on the dashboard, offline cache, lint, snapshot auto-commit, in-app glut warning)
+- Verify a real offline start of the app (airplane mode on a device).
 - Governorate-level cells from CAPMAS data.
 - Glut push alerts.
-- Offline cache.
 - Apply the agronomist's corrections to `seed.sql`.
-- Set up lint.
-- Automate committing `data/obour/`.
 
 **P3:**
 - SARIMA with a backtest once about 2 years of Obour data exist.

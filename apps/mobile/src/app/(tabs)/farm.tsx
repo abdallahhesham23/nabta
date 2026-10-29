@@ -4,7 +4,7 @@ import { View } from 'react-native';
 
 import { Body, Button, Card, Chip, Chips, Field, H2, Loading, Screen } from '@/components/ui';
 import { nextSeason, useMarket, type Market, type Season } from '@/lib/data';
-import { egp, num, parseNum, SEASON, SOIL, WATER, yr } from '@/lib/format';
+import { egp, num, parseNum, pct, SEASON, SOIL, WATER, yr } from '@/lib/format';
 import { supabase } from '@/lib/supabase';
 
 export default function FarmScreen() {
@@ -82,30 +82,29 @@ type Intention = { id: number; crop_id: string; season: Season; year: number; ar
 type Report = { yield_t: number };
 type Rec = { crop_id: string; rank: number; evi: number; expected_profit_egp_per_feddan: number; expected_price_egp_per_kg: number; cost_egp_per_feddan: number };
 
+type FarmData = { farmer: Farmer | null; plot: Plot | null; intentions: Intention[]; recs: Rec[] };
+
+async function fetchFarm(userId: string): Promise<FarmData> {
+  const [f, p, i, r] = await Promise.all([
+    supabase.from('farmers').select('full_name, gov_id, capital_egp').eq('id', userId).maybeSingle(),
+    supabase.from('plots').select('id, area_feddan, soil, water_source').order('id').limit(1).maybeSingle(),
+    supabase.from('intentions').select('id, crop_id, season, year, area_feddan, status, harvest_reports(yield_t)').order('id', { ascending: false }),
+    supabase.from('recommendations').select('crop_id, rank, evi, expected_profit_egp_per_feddan, expected_price_egp_per_kg, cost_egp_per_feddan').order('rank'),
+  ]);
+  // harvest_reports.intention_id is unique, so the API may embed one object instead of a list
+  const intentions = (i.data ?? []).map(({ harvest_reports: h, ...rest }) => ({
+    ...rest, harvest: (Array.isArray(h) ? h[0] : h) as Report | null ?? null,
+  })) as Intention[];
+  return { farmer: f.data, plot: p.data, intentions, recs: (r.data ?? []) as Rec[] };
+}
+
 function Farm({ userId, anonymous, market }: { userId: string; anonymous: boolean; market: Market }) {
-  const [farmer, setFarmer] = useState<Farmer | null>(null);
-  const [plot, setPlot] = useState<Plot | null>(null);
-  const [intentions, setIntentions] = useState<Intention[]>([]);
-  const [recs, setRecs] = useState<Rec[]>([]);
-  const [loaded, setLoaded] = useState(false);
+  const [data, setData] = useState<FarmData | null>(null);
+  const reload = useCallback(() => fetchFarm(userId).then(setData), [userId]);
+  useEffect(() => { fetchFarm(userId).then(setData); }, [userId]);
 
-  const reload = useCallback(async () => {
-    const [f, p, i, r] = await Promise.all([
-      supabase.from('farmers').select('full_name, gov_id, capital_egp').eq('id', userId).maybeSingle(),
-      supabase.from('plots').select('id, area_feddan, soil, water_source').order('id').limit(1).maybeSingle(),
-      supabase.from('intentions').select('id, crop_id, season, year, area_feddan, status, harvest_reports(yield_t)').order('id', { ascending: false }),
-      supabase.from('recommendations').select('crop_id, rank, evi, expected_profit_egp_per_feddan, expected_price_egp_per_kg, cost_egp_per_feddan').order('rank'),
-    ]);
-    // harvest_reports.intention_id is unique, so the API may embed one object instead of a list
-    const intents = (i.data ?? []).map(({ harvest_reports: h, ...rest }) => ({
-      ...rest, harvest: (Array.isArray(h) ? h[0] : h) as Report | null ?? null,
-    })) as Intention[];
-    setFarmer(f.data); setPlot(p.data); setIntentions(intents); setRecs((r.data ?? []) as Rec[]);
-    setLoaded(true);
-  }, [userId]);
-  useEffect(() => { reload(); }, [reload]);
-
-  if (!loaded) return <Loading />;
+  if (!data) return <Loading />;
+  const { farmer, plot, intentions, recs } = data;
   const cropName = (id: string) => market.crops.find((c) => c.id === id)?.name_ar ?? id;
 
   return (
@@ -125,18 +124,21 @@ function Farm({ userId, anonymous, market }: { userId: string; anonymous: boolea
   );
 }
 
-function ProfileForm({ userId, farmer, market, onSaved }: { userId: string; farmer: Farmer | null; market: Market; onSaved: () => void }) {
+function ProfileForm({ userId, farmer, market, onSaved }: { userId: string; farmer: Farmer | null; market: Market; onSaved: () => Promise<void> }) {
   const [name, setName] = useState(farmer?.full_name ?? '');
   const [gov, setGov] = useState(farmer?.gov_id ?? null);
   const [capital, setCapital] = useState(farmer?.capital_egp != null ? String(farmer.capital_egp) : '');
   const [msg, setMsg] = useState('');
+  const [busy, setBusy] = useState(false);
 
   async function save() {
     const cap = capital ? parseNum(capital) : null;
     if (capital && cap == null) return setMsg('اكتب رأس المال بالأرقام بس.');
+    setBusy(true);
     const { error } = await supabase.from('farmers').upsert({ id: userId, full_name: name || null, gov_id: gov, capital_egp: cap });
     setMsg(error ? 'حصلت مشكلة في الحفظ، حاول تاني.' : 'اتحفظ.');
-    if (!error) onSaved();
+    if (!error) await onSaved();
+    setBusy(false);
   }
 
   return (
@@ -147,24 +149,27 @@ function ProfileForm({ userId, farmer, market, onSaved }: { userId: string; farm
       <Chips>{market.governorates.map((g) => <Chip key={g.id} label={g.name_ar} selected={gov === g.id} onPress={() => setGov(g.id)} />)}</Chips>
       <Field label="رأس المال المتاح للزراعة (جنيه)" value={capital} onChangeText={setCapital} keyboardType="numeric" />
       {msg ? <Body>{msg}</Body> : null}
-      <Button label="حفظ" onPress={save} />
+      <Button label="حفظ" onPress={save} busy={busy} />
     </Card>
   );
 }
 
-function PlotForm({ plot, onSaved }: { plot: Plot | null; onSaved: () => void }) {
+function PlotForm({ plot, onSaved }: { plot: Plot | null; onSaved: () => Promise<void> }) {
   const [area, setArea] = useState(plot ? String(plot.area_feddan) : '');
   const [soil, setSoil] = useState(plot?.soil ?? null);
   const [water, setWater] = useState(plot?.water_source ?? null);
   const [msg, setMsg] = useState('');
+  const [busy, setBusy] = useState(false);
 
   async function save() {
     const a = parseNum(area);
     if (!a || a <= 0) return setMsg('اكتب مساحة الأرض بالفدان، مثلاً ٢ أو ٠٫٥');
     const row = { area_feddan: a, soil, water_source: water };
+    setBusy(true);
     const { error } = plot ? await supabase.from('plots').update(row).eq('id', plot.id) : await supabase.from('plots').insert(row);
     setMsg(error ? 'حصلت مشكلة في الحفظ، حاول تاني.' : 'اتحفظ.');
-    if (!error) onSaved();
+    if (!error) await onSaved();
+    setBusy(false);
   }
 
   return (
@@ -176,7 +181,7 @@ function PlotForm({ plot, onSaved }: { plot: Plot | null; onSaved: () => void })
       <Body muted>مصدر المية</Body>
       <Chips>{Object.entries(WATER).map(([k, v]) => <Chip key={k} label={v} selected={water === k} onPress={() => setWater(k)} />)}</Chips>
       {msg ? <Body>{msg}</Body> : null}
-      <Button label="حفظ" onPress={save} />
+      <Button label="حفظ" onPress={save} busy={busy} />
     </Card>
   );
 }
@@ -200,26 +205,32 @@ function Recommendations({ recs, cropName }: { recs: Rec[]; cropName: (id: strin
 const STATUS: Record<string, string> = { planned: 'ناوي أزرعه', planted: 'اتزرع', harvested: 'اتحصد' };
 
 function Plans({ plot, intentions, market, cropName, onSaved }: {
-  plot: Plot; intentions: Intention[]; market: Market; cropName: (id: string) => string; onSaved: () => void;
+  plot: Plot; intentions: Intention[]; market: Market; cropName: (id: string) => string; onSaved: () => Promise<void>;
 }) {
   const next = nextSeason();
   const [crop, setCrop] = useState<string | null>(null);
   const [area, setArea] = useState('');
   const [msg, setMsg] = useState('');
+  const [busy, setBusy] = useState<number | 'add' | null>(null);
   const seasonal = market.crops.filter((c) => c.seasons.includes(next.season));
+  const glut = crop ? market.cells[crop] : undefined;
 
   async function add() {
     const a = parseNum(area);
     if (!crop) return setMsg('اختار المحصول.');
     if (!a || a <= 0 || a > plot.area_feddan) return setMsg(`اكتب المساحة بالفدان (لحد ${num(plot.area_feddan)}).`);
+    setBusy('add');
     const { error } = await supabase.from('intentions').insert({ plot_id: plot.id, crop_id: crop, season: next.season, year: next.year, area_feddan: a });
     setMsg(error ? 'حصلت مشكلة في الحفظ، حاول تاني.' : 'اتسجّل.');
-    if (!error) { setCrop(null); setArea(''); onSaved(); }
+    if (!error) { setCrop(null); setArea(''); await onSaved(); }
+    setBusy(null);
   }
 
   async function setStatus(id: number, status: string) {
+    setBusy(id);
     await supabase.from('intentions').update({ status }).eq('id', id);
-    onSaved();
+    await onSaved();
+    setBusy(null);
   }
 
   return (
@@ -227,14 +238,17 @@ function Plans({ plot, intentions, market, cropName, onSaved }: {
       <H2>هتزرع إيه الموسم {SEASON[next.season]} {yr(next.year)}؟</H2>
       <Body muted>تسجيل نيتك بيساعد كل المزارعين يشوفوا الصورة الكاملة (بنعرض المجموع بس، مش بيانات حد بعينه).</Body>
       <Chips>{seasonal.map((c) => <Chip key={c.id} label={c.name_ar} selected={crop === c.id} onPress={() => setCrop(c.id)} />)}</Chips>
+      {crop && glut?.outlook === 'surplus' ? (
+        <Body>⚠️ المعروض المتوقع من {cropName(crop)} أعلى من المعتاد ({pct(glut.gap_pct)})، فالأسعار ممكن تنزل. فكّر في محصول تاني أو مساحة أقل.</Body>
+      ) : null}
       <Field label="المساحة (فدان)" value={area} onChangeText={setArea} keyboardType="numeric" />
       {msg ? <Body>{msg}</Body> : null}
-      <Button label="سجّل" onPress={add} />
+      <Button label="سجّل" onPress={add} busy={busy === 'add'} />
       {intentions.map((i) => (
         <View key={i.id} style={{ gap: 6, paddingTop: 10 }}>
           <Body>{cropName(i.crop_id)} · {SEASON[i.season]} {yr(i.year)} · {num(i.area_feddan)} فدان · {STATUS[i.status]}</Body>
-          {i.status === 'planned' ? <Button label="زرعته" secondary onPress={() => setStatus(i.id, 'planted')} /> : null}
-          {i.status === 'planted' ? <Button label="حصدته" secondary onPress={() => setStatus(i.id, 'harvested')} /> : null}
+          {i.status === 'planned' ? <Button label="زرعته" secondary busy={busy === i.id} onPress={() => setStatus(i.id, 'planted')} /> : null}
+          {i.status === 'planted' ? <Button label="حصدته" secondary busy={busy === i.id} onPress={() => setStatus(i.id, 'harvested')} /> : null}
           {i.status === 'harvested' && !i.harvest ? <HarvestForm intentionId={i.id} onSaved={onSaved} /> : null}
           {i.harvest ? <Body muted>المحصول: {num(i.harvest.yield_t)} طن. شكراً، ده بيحسّن التوقعات.</Body> : null}
         </View>
@@ -243,19 +257,22 @@ function Plans({ plot, intentions, market, cropName, onSaved }: {
   );
 }
 
-function HarvestForm({ intentionId, onSaved }: { intentionId: number; onSaved: () => void }) {
+function HarvestForm({ intentionId, onSaved }: { intentionId: number; onSaved: () => Promise<void> }) {
   const [yieldT, setYieldT] = useState('');
   const [price, setPrice] = useState('');
   const [msg, setMsg] = useState('');
+  const [busy, setBusy] = useState(false);
 
   async function save() {
     const y = parseNum(yieldT);
     const p = price ? parseNum(price) : null;
     if (y == null) return setMsg('اكتب كمية المحصول بالطن.');
     if (price && p == null) return setMsg('اكتب السعر بالأرقام بس.');
+    setBusy(true);
     const { error } = await supabase.from('harvest_reports').insert({ intention_id: intentionId, yield_t: y, price_egp_per_kg: p });
     setMsg(error ? 'حصلت مشكلة في الحفظ، حاول تاني.' : '');
-    if (!error) onSaved();
+    if (!error) await onSaved();
+    setBusy(false);
   }
 
   return (
@@ -263,7 +280,7 @@ function HarvestForm({ intentionId, onSaved }: { intentionId: number; onSaved: (
       <Field label="الكمية اللي حصدتها (طن)" value={yieldT} onChangeText={setYieldT} keyboardType="numeric" />
       <Field label="السعر اللي بعت بيه (جنيه للكيلو)" value={price} onChangeText={setPrice} keyboardType="numeric" />
       {msg ? <Body>{msg}</Body> : null}
-      <Button label="سجّل الحصاد" onPress={save} />
+      <Button label="سجّل الحصاد" onPress={save} busy={busy} />
     </View>
   );
 }

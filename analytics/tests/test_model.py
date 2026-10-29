@@ -29,6 +29,17 @@ def test_dashboard_without_trade_has_no_outlook():
     assert c.outlook is None and c.price_egp_per_kg is None
 
 
+def test_intentions_shown_only_with_enough_farms():
+    s = pd.concat([stats('tomato', [(2024, 100, 1000)]), stats('onion', [(2024, 50, 750)])])
+    t = pd.DataFrame(columns=['crop_id', 'year', 'export_t', 'import_t'])
+    plans = pd.DataFrame([{'crop_id': 'tomato', 'farmer_id': f'f{i}', 'area_feddan': 2.0} for i in range(10)]
+                         + [{'crop_id': 'tomato', 'farmer_id': 'f0', 'area_feddan': 1.0}]   # same farm, 2nd plot
+                         + [{'crop_id': 'onion', 'farmer_id': f'g{i}', 'area_feddan': 5.0} for i in range(9)])
+    c = dashboard.cells(s, t, {}, 2026, plans).set_index('crop_id')
+    assert (c.loc['tomato', 'intended_area_feddan'], c.loc['tomato', 'intending_farms']) == (21.0, 10)
+    assert pd.isna(c.loc['onion', 'intended_area_feddan']) and pd.isna(c.loc['onion', 'intending_farms'])  # 9 farms
+
+
 @pytest.mark.parametrize('gap,expected', [(0.06, 'surplus'), (0.05, 'balanced'), (-0.2, 'deficit')])
 def test_outlook_band(gap, expected):
     assert dashboard.outlook(gap) == expected

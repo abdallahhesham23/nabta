@@ -8,13 +8,14 @@ import { egp, OUTLOOK, SEASON, yr } from '@/lib/format';
 const ORDER = { vegetable: 0, field: 1, fruit: 2 };
 
 export default function MarketScreen() {
-  const { data, error } = useMarket();
+  const { data, error, stale } = useMarket();
   if (!data) return <Loading error={error} />;
   const { season, year } = nextSeason();
   const crops = [...data.crops].sort((a, b) => ORDER[a.category] - ORDER[b.category] || a.name_ar.localeCompare(b.name_ar, 'ar'));
 
   return (
     <Screen>
+      {stale ? <Body muted>بنعرض آخر بيانات محفوظة على الموبايل لحد ما التحديث يوصل.</Body> : null}
       <Body muted>الموسم القادم: {SEASON[season]} {yr(year)}. اختار محصول عشان تشوف المساحة والإنتاج والعرض والطلب قبل ما تزرع.</Body>
       {crops.map((c) => {
         const cell = data.cells[c.id];

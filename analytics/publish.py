@@ -14,8 +14,8 @@ from load import copy_rows, database_url
 from model import dashboard, evi, forecast
 
 
-def read(conn, query: str) -> pd.DataFrame:
-    cur = conn.execute(query)
+def read(conn, query: str, params: list | None = None) -> pd.DataFrame:
+    cur = conn.execute(query, params)
     return pd.DataFrame(cur.fetchall(), columns=[d.name for d in cur.description])
 
 
@@ -52,9 +52,13 @@ def main(today: date | None = None) -> None:
         costs = read(conn, "select crop_id, year, total_egp_per_feddan::float from costs where gov_id is null")
         farmers = read(conn, "select id, capital_egp::float from farmers")
         plots = read(conn, "select id, farmer_id, area_feddan::float, soil::text, water_source::text from plots")
+        season, plant = evi.next_season(today)
+        intentions = read(conn, "select i.crop_id, p.farmer_id, i.area_feddan::float from intentions i "
+                                "join plots p on p.id = i.plot_id where i.season = %s::season and i.year = %s "
+                                "and i.status in ('planned', 'planted')", [season, plant.year])
 
         fc = forecast.forecasts(prices, today.replace(day=1))
-        cells = dashboard.cells(stats, trade, harvest_prices(crops, fc, today), evi.next_season(today)[1].year)
+        cells = dashboard.cells(stats, trade, harvest_prices(crops, fc, today), plant.year, intentions)
         recs = evi.recommend(plots, farmers, crops, cells, fc, costs, today)
 
         with conn.cursor() as cur:

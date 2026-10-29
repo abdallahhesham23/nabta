@@ -45,6 +45,15 @@ export default function CropScreen() {
       </View>
 
       <Card>
+        <H2>مزارعين نبتة الموسم ده</H2>
+        <Body>
+          {cell.intending_farms
+            ? `${num(cell.intending_farms, 0)} مزارع ناويين يزرعوا ${big(cell.intended_area_feddan)} فدان من المحصول ده.`
+            : 'لسه عدد المزارعين اللي سجّلوا نيتهم قليل. بنعرض الرقم لما يوصلوا ١٠ مزارعين أو أكتر عشان نحافظ على خصوصية كل واحد.'}
+        </Body>
+      </Card>
+
+      <Card>
         <H2>الأسعار</H2>
         <Body>السعر المتوقع للمزارع عند الحصاد: {egp(cell.price_egp_per_kg)} للكيلو</Body>
         {obour ? <Body>سوق العبور ({dayMonth(obour.price_date)}): من {egp(obour.min_egp_per_kg)} لـ {egp(obour.max_egp_per_kg)} للكيلو</Body> : null}
