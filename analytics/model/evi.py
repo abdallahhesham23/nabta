@@ -16,6 +16,8 @@ from datetime import date, timedelta
 
 import pandas as pd
 
+from model.forecast import MAX_GROWTH
+
 PLANT_MONTH = {'summer': 3, 'nili': 8, 'winter': 10}
 WELL_PENALTY = 0.2
 TOP = 5
@@ -42,7 +44,9 @@ def recommend(plots: pd.DataFrame, farmers: pd.DataFrame, crops: pd.DataFrame, c
               forecasts: pd.DataFrame, costs: pd.DataFrame, today: date) -> pd.DataFrame:
     season, plant = next_season(today)
     cell = cells.set_index('crop_id')
-    cost = costs.sort_values('year').groupby('crop_id').total_egp_per_feddan.last()
+    latest = costs.sort_values('year').groupby('crop_id').last()
+    # costs quoted for an earlier year are scaled to the planting year with the forecast's price growth
+    cost = latest.total_egp_per_feddan * (1 + MAX_GROWTH) ** (plant.year - latest.year).clip(lower=0)
     fc = forecasts.set_index(['crop_id', 'target_month'])
     capital = farmers.set_index('id').capital_egp
     added_supply: dict[str, float] = {}

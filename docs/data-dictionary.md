@@ -43,12 +43,35 @@ Schema: [`supabase/migrations/20261028000000_init.sql`](../supabase/migrations/2
 | CAPMAS annual bulletin (النشرة السنوية للمساحات المحصولية والإنتاج النباتي) | area and production **by governorate and season** | governorate × season, yearly | **Manual.** Catalog at censusinfo.capmas.gov.eg wasn't reachable from the build machine; try from Egypt. Enter via `data/templates/crop_stats.csv`. |
 | Ministry of Agriculture, Economic Affairs Sector bulletins | area, production, yields, costs by governorate | governorate × season | Via partnership. Same template. |
 | Obour wholesale market (official page `http://www.oboormarket.org.eg/prices_ar.aspx`) | daily wholesale min/max prices for ~147 items from the morning auction | daily, latest auction only | **Automated:** `analytics/ingest/obour.py`. The page has no history, so the collector must run **every day**. Raw snapshots go to `data/obour/<date>.csv` (committed). Covers 11 of our crops: no wheat, maize, sorghum or dry beans; strawberry only in season; olives not listed. News reports (El Watan) were the fallback plan, but its archive only has ~27 past articles, so they aren't used. |
-| Agricultural Research Center | production cost per feddan | crop × governorate, yearly | Manual. `data/templates/costs.csv`. |
+| Agricultural Research Center | production cost per feddan | crop × governorate, yearly | **Not available online.** Interim: `data/manual/costs.csv` (see below). Replace with ARC figures when they arrive. |
+| Hand-entered figures (`data/manual/`, committed) | production costs; official wheat procurement price | national | `python -m load manual`. Each row's `source` cites its origin (`manual:<publisher>-<date>`). |
 | Agricultural Export Council | monthly exports | monthly | Manual. Use the `trade` table with `month` set. |
 
 `source` column values: `faostat`, `capmas`, `moa`, `obour`, `arc`, `aec`.
 
+## Interim production costs (`data/manual/costs.csv`)
+
+These are costs per feddan **excluding land rent**, taken from news reports quoting the head of the farmers' syndicate and growers. They are not official. The recommendation scoring scales each figure to the planting year at 15%/yr.
+
+| Crop | EGP/feddan | Year | Basis | Source |
+|------|-----------:|-----:|-------|--------|
+| Tomato | 100,000 | 2026 | stated "without rent" | [Al Mal, 31 Aug 2026](https://almalnews.com/2132560/) |
+| Onion | 50,000 | 2026 | 85,000 total minus 35,000 winter rent | [Al Mal, 21 Apr 2026](https://almalnews.com/2109485/) |
+| Wheat | 17,800 | 2023 | itemised 23,800 minus 6,000 rent | [Al Mal, 19 Jan 2023](https://almalnews.com/1451900/) |
+| Potato | 120,000 | 2024 | rent basis **not stated**, so may include rent | [Al Mal, 23 Jul 2024](https://almalnews.com/1810713/) |
+
+Left out on purpose:
+- **Maize:** the only 2026 "study" prices maize at 4 EGP/kg, a 2020-era price, so its costs aren't credible either.
+- **Garlic and strawberry:** only undated or contradictory figures exist (garlic "over 25k"; strawberry quoted at up to 700k).
+- **Cucumber, pepper, beans and sorghum:** no current figures found.
+
+Crops with no cost row get no recommendation.
+
+Wheat farmgate price for 2026: the official procurement price of 2,350 EGP/ardeb (150 kg) = 15.67 EGP/kg, with 15.00 for the lowest cleanliness grade ([CNBC Arabia, Aug 2025](https://www.cnbcarabia.com/142117/2025/27/08/)). It's loaded as a 2026 yearly farmgate price, so the forecast is anchored on it.
+
 ## Known data issues
+
+- **The onion forecast is too optimistic.** The model expects about 18 EGP/kg at the spring 2027 harvest, from the 2024 FAOSTAT seasonal pattern. But farmers were reportedly getting about 4 EGP/kg in April 2026 during a glut. Because of this, onion currently tops recommendations, so treat it with care. Daily Obour snapshots will correct it as history builds up.
 
 - **Price history is too thin for forecasting.** FAOSTAT has monthly Egyptian producer prices only for some crops and years: tomato, potato, wheat and maize have 36 months in 2020–2024, with 2021 and 2023 missing. The rest have one figure a year, or none. SARIMA needs a few years of unbroken monthly data, so the price forecast depends on getting Obour or Ministry monthly prices.
 - **Obour prices are per variety.** The collector combines varieties into one row per crop: min = lowest min, max = highest max, avg = mean of the variety midpoints. Excluded look-alikes: coloured bell peppers, green onion bunches, lemons and other non-orange citrus. Only items priced per kilo are kept.

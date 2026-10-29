@@ -1,0 +1,5 @@
+crop_id,gov_id,year,seeds_egp,fertiliser_egp,pesticide_egp,labour_egp,irrigation_egp,total_egp_per_feddan,source
+tomato,,2026,,,,,,100000,manual:almalnews-2026-08-31
+onion,,2026,,,,,,50000,manual:almalnews-2026-04-21
+wheat,,2023,1500,5500,600,7000,2000,17800,manual:almalnews-2023-01-19
+potato,,2024,,,,,,120000,manual:almalnews-2024-07-23

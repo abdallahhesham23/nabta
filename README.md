@@ -41,6 +41,7 @@ python -m venv .venv && .venv/Scripts/python -m pip install -r requirements.txt 
 .venv/Scripts/python -m ingest.faostat   # downloads ~130 MB on first run, writes data/processed/faostat_*.csv
 .venv/Scripts/python -m ingest.obour     # run DAILY: saves data/obour/<date>.csv
 .venv/Scripts/python -m load all         # replace each source's rows in Supabase (needs .env)
+.venv/Scripts/python -m load manual      # just the hand-entered data/manual/*.csv (costs, wheat price)
 .venv/Scripts/python -m publish          # forecasts, dashboard cells, recommendations -> Supabase
 ```
 

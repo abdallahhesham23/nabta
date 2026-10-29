@@ -124,7 +124,7 @@ Nothing in the app is meaningful without the data. Collect 2020–2025 for the 1
 - **Status (2026-10-29): done, with a weaker forecast than planned.**
   - Supabase project live; all source data loaded; `publish` writes 204 forecast rows and 17 dashboard cells.
   - The forecast is a seasonal-naive baseline, not SARIMA: FAOSTAT monthly prices are too sparse. Its growth cap of 15%/yr is an assumption. Switch to SARIMA with a backtest once about 2 years of daily Obour snapshots exist.
-  - The EVI and herd-spreading code is built and tested, but it produces **no recommendations until production costs per feddan are loaded** into `costs` (ARC data, still missing).
+  - EVI and herd spreading are built and tested. **Update 2026-10-29:** interim costs from news reports are loaded for tomato, onion, wheat and potato (`data/manual/costs.csv`), so recommendations now work for those four. This was verified end to end with a temporary test farm, which was then deleted. Official ARC costs are still needed for the rest. The onion price forecast is known to be too optimistic.
   - The jobs log in as the narrow `nabta_loader` role.
 
 ### Phase 2: Mobile MVP

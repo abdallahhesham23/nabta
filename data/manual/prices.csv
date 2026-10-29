@@ -1,0 +1,2 @@
+crop_id,market,price_date,granularity,min_egp_per_kg,max_egp_per_kg,avg_egp_per_kg,source
+wheat,farmgate,2026-01-01,year,15.0,15.67,15.67,manual:procurement-2026

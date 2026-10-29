@@ -113,7 +113,7 @@ def test_ranks_by_profit_filters_season_soil_and_capital():
     assert p1.evi.tolist()[0] == 100
     assert r[r.plot_id == 2].crop_id.tolist() == ['potato']  # onion doesn't suit sandy soil
     assert r[r.plot_id == 3].empty                            # 2 feddan × 20k cost > 10k capital
-    assert (p1.expected_profit_egp_per_feddan.iloc[0]) == 6.0 * 1000 * 10 - 20000
+    assert p1.expected_profit_egp_per_feddan.iloc[0] == round(6.0 * 1000 * 10 - 20000 * 1.15)  # 2025 cost grown to 2026
 
 
 def test_crops_without_cost_data_are_not_ranked():
