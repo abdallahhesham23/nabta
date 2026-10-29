@@ -104,6 +104,21 @@ def test_next_season_and_harvest_month():
     assert evi.harvest_month(date(2026, 10, 1), 110) == date(2027, 1, 1)
 
 
+def test_selling_price_averages_over_the_window_not_the_pre_harvest_peak():
+    # shaped like onion: old-stock peak in April, new crop pushes prices down from May
+    fc = pd.DataFrame([{'target_month': date(2027, m, 1), 'price_egp_per_kg': p, 'lower_egp_per_kg': p * 0.7,
+                        'upper_egp_per_kg': p * 1.3} for m, p in ((3, 18.0), (4, 19.0), (5, 8.0), (6, 9.0))])
+    s = evi.selling_price(fc, date(2026, 10, 1), 210)          # harvest April 2027 -> Apr, May, Jun
+    assert s.price_egp_per_kg == pytest.approx(12.0)
+    assert evi.selling_price(fc, date(2026, 10, 1), 300) is None  # harvest month beyond the forecast
+
+
+def test_selling_window_wraps_into_next_year():
+    fc = pd.DataFrame([{'target_month': date(y, m, 1), 'price_egp_per_kg': p, 'lower_egp_per_kg': p,
+                        'upper_egp_per_kg': p} for y, m, p in ((2026, 11, 3.0), (2026, 12, 6.0), (2027, 1, 9.0))])
+    assert evi.selling_price(fc, date(2026, 8, 1), 100).price_egp_per_kg == pytest.approx(6.0)  # Nov, Dec, Jan
+
+
 def test_ranks_by_profit_filters_season_soil_and_capital():
     cells, fc, costs = model_inputs()
     r = evi.recommend(plots([(2, 'loam'), (2, 'sandy'), (2, 'loam')]), farmers(3).assign(capital_egp=[None, None, 10000]),

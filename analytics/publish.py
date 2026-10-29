@@ -20,7 +20,7 @@ def read(conn, query: str) -> pd.DataFrame:
 
 
 def harvest_prices(crops: pd.DataFrame, fc: pd.DataFrame, today: date) -> dict[str, float]:
-    """Forecast price at each crop's next harvest; perennials get the 12-month average."""
+    """Forecast price over each crop's next selling window; perennials get the 12-month average."""
     out = {}
     for c in crops.itertuples():
         f = fc[fc.crop_id == c.id]
@@ -29,10 +29,8 @@ def harvest_prices(crops: pd.DataFrame, fc: pd.DataFrame, today: date) -> dict[s
         plant = evi.next_plant(c.seasons, today)
         if plant is None:
             out[c.id] = float(f.price_egp_per_kg.mean())
-        else:
-            hit = f[f.target_month == evi.harvest_month(plant, c.cycle_days)]
-            if len(hit):
-                out[c.id] = float(hit.price_egp_per_kg.iloc[0])
+        elif (s := evi.selling_price(f, plant, c.cycle_days)) is not None:
+            out[c.id] = float(s.price_egp_per_kg)
     return out
 
 

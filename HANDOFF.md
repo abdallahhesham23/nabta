@@ -10,29 +10,32 @@ phase status), [docs/data-dictionary.md](docs/data-dictionary.md) (sources, unit
 ## M. Recent changes (read this first)
 
 - **Last updated:** 2026-10-29
-- **Most recent task:** connected GitHub and removed the AI co-author line from the commit history.
-  - Installed GitHub CLI 2.103.3 with winget. The user signed in through the browser as `abdallahhesham23`.
-  - Created the **private** repo https://github.com/abdallahhesham23/nabta and pushed `main` (old head `1c93fd3`).
-  - At the user's request ("make me the one who committed"), rewrote all 8 local commits with `git filter-branch` to drop the `Co-Authored-By: Claude` line. Author, dates and files are unchanged; the new head is `d4243cf`.
-  - The force-push was denied for the agent by the permission classifier, so the user ran `git push --force-with-lease=main:1c93fd3 origin main` themself.
-    - First try: `remote: Repository not found`, because git in their PowerShell wasn't using the `gh` sign-in. Fixed with `gh auth setup-git`, which adds a global git credential helper for github.com.
-    - Second try succeeded.
-  - **Verified:** `main` is in sync with `origin/main`. The GitHub API shows all 8 commits with author and committer `abdallahhesham23` and no `Co-Authored-By` line.
-  - A local backup of the old history is kept at `refs/original/refs/heads/main`.
-  - Then committed and pushed `CLAUDE.md` (the no-AI-attribution rule) and this handoff update, with no trailer.
-- **Before that:** interim production costs loaded, so recommendations now work for tomato, onion,
-  wheat and potato. This was verified end to end with a temporary test farm, which was deleted
-  afterwards (commit `0d42a64`).
+- **Most recent task:** fixed the over-optimistic onion forecast (P1-1). The fix is uncommitted; the live DB is already republished.
+  - **Diagnosis:** the cause was not missing Obour anchoring.
+    - The model priced each crop at one "harvest month", and for onion (October + 180 days) that was March, the old-stock peak (2024: 17.6 in March, 18.3 in April, then 7.3 in May once the new crop lands).
+    - Anchoring to Obour was rejected: October wholesale (17.5) is old stored crop and would raise the spring forecast.
+  - **Fix:** `model/evi.py` `selling_price()` averages the harvest month and the 2 months after (`SELL_MONTHS = 3`). It's used by both `evi.recommend` and `publish.harvest_prices`, so the dashboard price and the recommendations agree.
+  - **Onion cycle** corrected from 180 to 210 days (`supabase/seed.sql`, plus the live `crops` row via SQL). It's still provisional pending the ARC review; `docs/agronomy-review.xlsx` still shows the old 180.
+  - **Result** (live, after `publish`):
+    - onion 18.35 → 12.22 EGP/kg; tomato 9.81 → 11.19; potato 18.37 → 18.70; wheat unchanged at 15.49.
+    - For a 3-feddan loam/canal winter plot: onion EVI 100 (133k profit per feddan, was 226k), tomato 61 (98k), potato 51 (80k), wheat 13 (17k). Onion is still first; see §J-1.
+- **Before that:** connected GitHub through the `gh` CLI.
+  - Private repo https://github.com/abdallahhesham23/nabta.
+  - History rewritten to drop the AI co-author line; the user ran the force-push. `gh auth setup-git` configures git credentials.
+  - All commits show only `abdallahhesham23` (verified via the API). The old history is backed up at `refs/original/refs/heads/main`.
 - **Most recent verification (2026-10-29):**
   - `npm run test:db`: 4/4 pass.
-  - `analytics` pytest: 22/22 pass.
-  - `apps/mobile` `tsc --noEmit`: OK.
-  - The daily scheduled task ran at 11:53 with result 0 and collected the 2026-10-29 Obour snapshot.
+  - `analytics` pytest: 24/24 pass, including 2 new selling-window tests.
+  - `publish` exit 0 (204 forecasts, 17 cells).
+  - Read-only in-memory scoring check against live data (nothing written).
+  - `apps/mobile` `tsc --noEmit`: OK as of the last app change; the app is unchanged in this task.
 - **Current blockers:**
   - WhatsApp login needs a Twilio account.
   - An Android build needs an Expo account.
   - Official ARC costs are missing for most crops.
-- **Next recommended action:** fix the over-optimistic vegetable forecast, especially onion, by anchoring it to recent Obour prices (§K P1-1).
+- **Next recommended action:**
+  - Commit and push this fix once the user approves.
+  - Then: official ARC costs for more crops (§K P1-3), or WhatsApp login once the user has Twilio (§K P1-4).
 
 ---
 
@@ -225,7 +228,7 @@ docs/agronomy-review.xlsx            Arabic sheet for an ARC agronomist to corre
 | Schema + RLS | VERIFIED | `supabase/migrations/` | PGlite tests + live checks |
 | Loader (`load.py`) | VERIFIED | `analytics/load.py` | sources faostat/obour/manual |
 | Quad dashboard cells | VERIFIED | `model/dashboard.py` | national only; "area now" = FAOSTAT 2024 harvested area |
-| Price forecast | IMPLEMENTED — known bias | `model/forecast.py` | onion/veg too optimistic (§J-1) |
+| Price forecast | IMPLEMENTED — weak baseline | `model/forecast.py`, `evi.selling_price` | selling-window pricing added 2026-10-29; onion still optimistic (§J-1) |
 | EVI recommendations | TESTED + E2E once | `model/evi.py`, `publish.py` | 4 crops with costs |
 | Herd spreading | TESTED (unit only) | `model/evi.py` | can't matter at pilot scale |
 | Mobile market/crop/compare | VERIFIED (web build) | `apps/mobile/src/app/` | native device not run |
@@ -275,7 +278,7 @@ docs/agronomy-review.xlsx            Arabic sheet for an ARC agronomist to corre
 | Command (from repo root unless noted) | Covers | Last result (2026-10-29) |
 |---|---|---|
 | `npm run test:db` | migrations + seed in PGlite, anon access, RLS isolation, constraints | 4/4 pass |
-| `cd analytics && .venv/Scripts/python -m pytest -q` | FAOSTAT parsing, Obour parsing/date logic, dashboard, forecast, EVI incl. spreading and cost growth | 22/22 pass |
+| `cd analytics && .venv/Scripts/python -m pytest -q` | FAOSTAT parsing, Obour parsing/date logic, dashboard, forecast, EVI incl. spreading, cost growth, selling window | 24/24 pass |
 | `cd apps/mobile && npx tsc --noEmit` | app typecheck | OK |
 | Manual, browser at 375×812 | market, crop (maize), compare, login error | OK; month-label overlap fixed afterwards, but only confirmed via tsc, not re-screenshotted |
 | Manual, E2E publish with a temporary farm | recommendations written and correct | OK; test rows deleted |
@@ -312,11 +315,12 @@ The user's decisions are in PLAN.md §7. The rest:
 
 ## J. Known bugs, risks and limitations
 
-1. **The onion (and possibly other vegetable) forecast is too optimistic.** Severity: high for recommendation trust.
-   - The model gives about 18 EGP/kg at the spring 2027 harvest, from the 2024 FAOSTAT seasonal pattern and 15% growth. Reports say about 4 EGP/kg farmgate in April 2026, during a glut.
-   - Effect: onion ranks first by a wide margin (EVI 100, about 226k profit per feddan).
-   - Reproduce: run `publish` with any loam winter plot.
-   - Next step: §K P1-1.
+1. **Onion is still somewhat optimistic** (partly fixed 2026-10-29). Severity: medium.
+   - Fixed: pricing at the pre-harvest peak (selling window + 210-day cycle). Onion went from 18.35 to 12.22 EGP/kg, and profit per feddan from 226k to 133k.
+   - Remaining: onion still ranks first for loam winter plots. The reported spring-2026 glut (about 4 EGP/kg farmgate, Al Mal, 21 Apr 2026) isn't in FAOSTAT, whose data ends in 2024. The seasonal index comes from only 2 years of monthly data (2020, 2024).
+   - Reproduce: score a 3-feddan loam/canal plot, as in the read-only check under §M.
+   - Next step: wait for Obour daily history to cover the April–June 2027 harvest; or load Ministry/CAPMAS monthly onion prices for 2025–26 into `data/manual/prices.csv` (months of a year count only if there are 3 or more).
+   - Don't anchor to the current Obour price: October wholesale is old stored crop.
 2. **The forecast is weak in general:** a fixed ±30% band, no backtest, and the 15% growth is an assumption. Wheat is anchored to the procurement price; the other crops aren't.
 3. **The dashboard's "area now" is the FAOSTAT 2024 harvested area**, not this season's planting. Labelled as such in the app.
 4. **Interim costs are news-sourced and mixed in age:** 2023–2026, scaled at 15%/yr. Potato may include rent.
@@ -337,10 +341,9 @@ The user's decisions are in PLAN.md §7. The rest:
 **P0:** none. (The history-rewrite push was done and verified on 2026-10-29.)
 
 **P1:**
-1. **Anchor forecasts to recent Obour prices.**
-   - Why: onion bias (§J-1).
-   - Where: `analytics/model/forecast.py`, `publish.py`; Obour history is in the `prices` table (market `obour`).
-   - Accept when: onion's forecast at its next harvest is within a sane range of recent Obour and wholesale levels; tests cover the anchoring; `publish` has been rerun.
+1. **Done 2026-10-29 (uncommitted): onion forecast bias**, fixed via the selling window rather than Obour anchoring (why: §J-1).
+   - Left: the onion data gap in §J-1.
+   - Left: update `docs/agronomy-review.xlsx`, which still shows onion at 180 days.
 2. **Done 2026-10-29: backed up the code** to the private GitHub repo (history rewritten to drop AI attribution; verified).
 3. **Get official ARC costs per feddan for the other crops.**
    - Where: `data/manual/costs.csv` or `data/templates/costs.csv`, then `python -m load manual` and `python -m publish`.

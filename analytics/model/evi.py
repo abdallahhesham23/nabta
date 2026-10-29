@@ -1,7 +1,8 @@
 """Crop recommendations per farm plot: the EVI (economic viability index, 0–100).
 
 For the next planting season, each crop that fits the plot is scored:
-    profit/feddan = forecast price at harvest × 1000 × yield − production cost
+    profit/feddan = forecast price over the selling window × 1000 × yield − production cost
+                    (window = harvest month + the 2 months after; see selling_price)
     risk          = forecast band width + expected glut (supply above usual demand)
                     + 0.2 if a high-water crop is on well water
     score         = profit × (1 − risk, floored at 10%);   EVI = score as % of the plot's best score
@@ -21,6 +22,7 @@ from model.forecast import MAX_GROWTH
 PLANT_MONTH = {'summer': 3, 'nili': 8, 'winter': 10}
 WELL_PENALTY = 0.2
 TOP = 5
+SELL_MONTHS = 3  # farmers sell a harvest over several weeks, not at one month's price
 
 
 def next_season(today: date) -> tuple[str, date]:
@@ -40,6 +42,18 @@ def harvest_month(plant: date, cycle_days: int) -> date:
     return date(d.year, d.month, 1)
 
 
+def selling_price(fc: pd.DataFrame, plant: date, cycle_days: int) -> pd.Series | None:
+    """Mean forecast (price, lower, upper) over the harvest month and the SELL_MONTHS - 1 after it.
+    fc: one crop's forecast rows. A single month can hit the pre-harvest peak, when old stock runs
+    out (onion: ~18 EGP/kg in March and April, ~8 in May once the new crop lands)."""
+    h = harvest_month(plant, cycle_days)
+    months = [date(h.year + (h.month - 1 + k) // 12, (h.month - 1 + k) % 12 + 1, 1) for k in range(SELL_MONTHS)]
+    rows = fc[fc.target_month.isin(months)]
+    if h not in set(rows.target_month):
+        return None
+    return rows[['price_egp_per_kg', 'lower_egp_per_kg', 'upper_egp_per_kg']].mean()
+
+
 def recommend(plots: pd.DataFrame, farmers: pd.DataFrame, crops: pd.DataFrame, cells: pd.DataFrame,
               forecasts: pd.DataFrame, costs: pd.DataFrame, today: date) -> pd.DataFrame:
     season, plant = next_season(today)
@@ -47,7 +61,7 @@ def recommend(plots: pd.DataFrame, farmers: pd.DataFrame, crops: pd.DataFrame, c
     latest = costs.sort_values('year').groupby('crop_id').last()
     # costs quoted for an earlier year are scaled to the planting year with the forecast's price growth
     cost = latest.total_egp_per_feddan * (1 + MAX_GROWTH) ** (plant.year - latest.year).clip(lower=0)
-    fc = forecasts.set_index(['crop_id', 'target_month'])
+    fc = dict(tuple(forecasts.groupby('crop_id')))
     capital = farmers.set_index('id').capital_egp
     added_supply: dict[str, float] = {}
     rows = []
@@ -59,10 +73,10 @@ def recommend(plots: pd.DataFrame, farmers: pd.DataFrame, crops: pd.DataFrame, c
                 continue
             if plot.soil and plot.soil not in c.soils:
                 continue
-            key = (c.id, harvest_month(plant, c.cycle_days))
-            if key not in fc.index:
+            f = selling_price(fc[c.id], plant, c.cycle_days) if c.id in fc else None
+            if f is None:
                 continue
-            f, cl = fc.loc[key], cell.loc[c.id]
+            cl = cell.loc[c.id]
             if pd.isna(cl.yield_t_per_feddan):
                 continue
             total_cost = cost[c.id] * plot.area_feddan

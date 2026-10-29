@@ -71,7 +71,12 @@ Wheat farmgate price for 2026: the official procurement price of 2,350 EGP/ardeb
 
 ## Known data issues
 
-- **The onion forecast is too optimistic.** The model expects about 18 EGP/kg at the spring 2027 harvest, from the 2024 FAOSTAT seasonal pattern. But farmers were reportedly getting about 4 EGP/kg in April 2026 during a glut. Because of this, onion currently tops recommendations, so treat it with care. Daily Obour snapshots will correct it as history builds up.
+- **Onion is still optimistic, but less so (fixed in part on 2026-10-29).**
+  - The main bug: the price was read in a single "harvest month" that landed on the pre-harvest peak (old stock runs out in March and April at about 18 EGP/kg, then the price falls to about 8 in May).
+  - The fix: prices now average the harvest month and the 2 months after it (`model/evi.py` `selling_price`), and onion's cycle was corrected from 180 to 210 days (October nursery → April–May harvest).
+  - Onion's selling price went from 18.35 to 12.22 EGP/kg. It still ranks first for a loam winter plot (about 133k EGP profit per feddan, against tomato's 98k).
+  - What's left: the reported spring-2026 glut (about 4 EGP/kg farmgate) isn't in FAOSTAT, whose data ends in 2024. Obour daily history through the 2027 harvest, or Ministry monthly prices for 2025–26, would fix this.
+  - Anchoring to today's Obour price was considered and rejected: October wholesale (about 17.5) is old stored crop and would push the spring forecast *up*.
 
 - **Price history is too thin for forecasting.** FAOSTAT has monthly Egyptian producer prices only for some crops and years: tomato, potato, wheat and maize have 36 months in 2020–2024, with 2021 and 2023 missing. The rest have one figure a year, or none. SARIMA needs a few years of unbroken monthly data, so the price forecast depends on getting Obour or Ministry monthly prices.
 - **Obour prices are per variety.** The collector combines varieties into one row per crop: min = lowest min, max = highest max, avg = mean of the variety midpoints. Excluded look-alikes: coloured bell peppers, green onion bunches, lemons and other non-orange citrus. Only items priced per kilo are kept.

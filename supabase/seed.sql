@@ -39,7 +39,7 @@ insert into crops (id, name_ar, name_en, category, seasons, water_need, soils, c
   ('wheat',      'قمح',     'Wheat',           'field',     '{winter}',             'medium', '{clay,loam,sandy}',        160),
   ('maize',      'ذرة شامية', 'Maize',         'field',     '{summer,nili}',        'high',   '{clay,loam}',              120),
   ('sorghum',    'ذرة رفيعة', 'Sorghum',       'field',     '{summer}',             'low',    '{clay,loam,sandy}',        120),
-  ('onion',      'بصل',     'Onion',           'vegetable', '{winter}',             'medium', '{clay,loam}',              180),
+  ('onion',      'بصل',     'Onion',           'vegetable', '{winter}',             'medium', '{clay,loam}',              210),
   ('garlic',     'ثوم',     'Garlic',          'vegetable', '{winter}',             'medium', '{clay,loam}',              180),
   ('cucumber',   'خيار',    'Cucumber',        'vegetable', '{summer,winter,nili}', 'high',   '{sandy,loam}',              75),
   ('pepper',     'فلفل',    'Pepper',          'vegetable', '{summer,winter,nili}', 'medium', '{loam,sandy}',             150),
