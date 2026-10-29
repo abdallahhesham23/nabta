@@ -1,0 +1,13 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "mobile-web",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["expo", "start", "--web", "--port", "8081"],
+      "cwd": "apps/mobile",
+      "env": { "CI": "1", "BROWSER": "none" },
+      "port": 8081
+    }
+  ]
+}

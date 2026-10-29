@@ -121,6 +121,11 @@ Nothing in the app is meaningful without the data. Collect 2020–2025 for the 1
 - Supabase project, schema migration, RLS, seed.
 - Importers, SARIMA forecasts with a backtest report (MAPE per crop vs. seasonal-naive), dashboard_cells, EVI, spreading step.
 - pytest covering EVI, gap and spreading logic.
+- **Status (2026-10-29): done, with a weaker forecast than planned.**
+  - Supabase project live; all source data loaded; `publish` writes 204 forecast rows and 17 dashboard cells.
+  - The forecast is a seasonal-naive baseline, not SARIMA: FAOSTAT monthly prices are too sparse. Its growth cap of 15%/yr is an assumption. Switch to SARIMA with a backtest once about 2 years of daily Obour snapshots exist.
+  - The EVI and herd-spreading code is built and tested, but it produces **no recommendations until production costs per feddan are loaded** into `costs` (ARC data, still missing).
+  - The jobs log in as the narrow `nabta_loader` role.
 
 ### Phase 2: Mobile MVP
 - Phone OTP sign-in → farm profile wizard (icons + short Arabic labels, one question per screen).
@@ -128,6 +133,11 @@ Nothing in the app is meaningful without the data. Collect 2020–2025 for the 1
 - Record planting intention; post-harvest report; push alerts.
 - RTL throughout, large text, works on a 2 GB RAM Android phone, offline last-view.
 - Internal testing build via EAS → Play Store closed testing track.
+- **Status (2026-10-29): app built, partly verified.**
+  - Done: `apps/mobile` (Expo SDK 57, Arabic RTL) with the market list, quad dashboard per crop, crop comparison, and farm tab (WhatsApp login, profile, plot, planting plans, harvest report, recommendations).
+  - Verified in the web build: market, crop and compare screens show live Supabase data; login fails gracefully while the WhatsApp provider is off.
+  - Not verified: the signed-in farm screens. They need WhatsApp login (Twilio Verify + Meta-approved sender); the database rules behind them are covered by `npm run test:db`.
+  - Not built yet: push alerts (needs an Expo/FCM project), offline cache, EAS Android build (needs an Expo account).
 
 ### Phase 3: Field pilot (one full season)
 - 100 users + 100 control farmers in Sharqia, Beheira, Minya, onboarded at bank branches.
